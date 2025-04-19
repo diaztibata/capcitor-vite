@@ -89,4 +89,14 @@ async function registrame() {
   } catch (error) {
     console.error("Error al registrar:", error.message);
   }
+  document.body.innerHTML = "hola"
 }
+
+
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    document.body.innerHTML = "hola"
+  } else {
+    document.getElementById('btn-ir-login').addEventListener('click', crearFormularioLogin);
+  }
+});
