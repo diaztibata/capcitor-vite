@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, createUserWithEmailAndPassword, onAuthStateChanged } from "firebase/auth";
-import { getFirestore, doc, setDoc } from "firebase/firestore";
+import { getAuth, createUserWithEmailAndPassword, onAuthStateChanged, signInWithEmailAndPassword, signOut, updateEmail,EmailAuthProvider,reauthenticateWithCredential, updatePassword } from "firebase/auth";
+import { getFirestore, doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
 
 // Tu config de Firebase
 const firebaseConfig = {
@@ -27,13 +27,13 @@ function crearFormularioLogin() {
     <div id="form-login">
       <input type="email" id="login-email" placeholder="Correo" required><br>
       <input type="password" id="login-password" placeholder="Contraseña" required><br>
-      <button type="submit">Iniciar sesión</button>
+      <button>Iniciar sesión</button>
     </div>
     <p>¿No tienes cuenta? <button id="btn-ir-registro">Regístrate</button></p>
   `;
 
   document.body.appendChild(contenedor);
-
+  document.querySelector('#form-login button').addEventListener('click', iniciarSesion);
   document.getElementById('btn-ir-registro').addEventListener('click', crearFormularioRegistro);
 }
 
@@ -61,9 +61,7 @@ function crearFormularioRegistro() {
   document.getElementById('btn-registrarse').addEventListener('click', registrame);
 }
 
-// Iniciar mostrando el login
-crearFormularioLogin();
-
+//registrar datos
 async function registrame() {
 
   const nombre = document.getElementById("nombre").value;
@@ -89,14 +87,110 @@ async function registrame() {
   } catch (error) {
     console.error("Error al registrar:", error.message);
   }
-  document.body.innerHTML = "hola"
+}
+
+//iniciar sesión
+async function iniciarSesion() {
+
+  const email = document.getElementById("login-email").value;
+  const password = document.getElementById("login-password").value;
+
+  try {
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const usuario = userCredential.user;
+    alert(`Bienvenido ${usuario.email}`);
+    // Aquí puedes redirigir o mostrar la app principal
+  } catch (error) {
+    alert("Error al iniciar sesión: ");
+  }
+}
+
+//mostrar datos
+function mostrarDatosUsuario() {
+  onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      const uid = user.uid;
+      const docRef = doc(db, "usuarios", uid);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const datos = docSnap.data();
+        document.body.innerHTML = `
+          <h2>Perfil de Usuario</h2>
+          <p><strong>Nombre:</strong> <input type="text" id="nombre" value="${datos.nombre}" /></p>
+          <p><strong>Correo:</strong> <input type="text" id="email" value="${datos.email}" /></p>
+          <p><strong>Password:</strong> <input type="password" id="password" placeholder="No modificar" value="" /></p>
+          <p><strong>País:</strong> <input type="text" id="pais" value="${datos.pais}" /></p>
+          <p><strong>Edad:</strong> <input type="text" id="edad" value="${datos.edad}" /></p>
+          <button id="actualizar">Actualizar</button>
+          <button id="cerrar">Cerrar sesión</button>
+
+        `;
+        document.getElementById('actualizar').addEventListener('click', actualizar);
+        document.getElementById('cerrar').addEventListener('click', cerrarSesion);
+      } else {
+        alert("No se encontraron datos del usuario.");
+      }
+    }
+  });
+}
+
+
+//actualizar
+async function actualizar(){
+  const user = auth.currentUser;
+  const uid = user.uid;
+
+  const nombre = document.getElementById("nombre").value;
+  const edad = document.getElementById("edad").value;
+  const pais = document.getElementById("pais").value;
+  const nuevoCorreo = document.getElementById("email").value;
+  const nuevaClave = document.getElementById("password").value;
+
+  try {
+    // Actualizar datos de autenticacion
+    const contraseñaActual = prompt("Confirma tu contraseña actual:");
+
+    const credential = EmailAuthProvider.credential(user.email, contraseñaActual);
+    await reauthenticateWithCredential(user, credential);
+
+    await updateEmail(user, nuevoCorreo);
+    if (nuevaClave.trim() !== "") {
+      await updatePassword(user, nuevaClave);
+    }
+    
+
+    //actualiza los datos de la base de datos
+    await updateDoc(doc(db, "usuarios", uid), {
+        nombre: nombre,
+        edad: edad,
+        pais: pais,
+        email: nuevoCorreo,
+    });
+
+    alert("Datos actualizados correctamente");
+  } catch (error) {
+    console.error("Error al actualizar:", error.message);
+  }
+}
+
+//cerrrar sesion
+function cerrarSesion() {
+  signOut(auth)
+    .then(() => {
+      alert("Sesión cerrada");
+      crearFormularioLogin(); // Muestra el login de nuevo
+    })
+    .catch((error) => {
+      console.error("Error al cerrar sesión:", error);
+    });
 }
 
 
 onAuthStateChanged(auth, (user) => {
   if (user) {
-    document.body.innerHTML = "hola"
+    mostrarDatosUsuario()
   } else {
-    document.getElementById('btn-ir-login').addEventListener('click', crearFormularioLogin);
+    crearFormularioLogin();
   }
 });
